@@ -117,11 +117,12 @@ public final class Player {
         }
 
         if (dashTimer <= 0f && !groundPounding) {
-            float target = axis * RUN_SPEED;
+            float target = GameMath.clamp(axis * RUN_SPEED + externalPushX, -500f, 500f);
             float rate = axis == 0 ? DECELERATION : ACCELERATION;
             velocityX = GameMath.approach(velocityX, target, rate * dt);
+        } else {
+            velocityX += externalPushX * dt * 0.25f;
         }
-        velocityX += externalPushX * dt;
 
         float oldX = x;
         x += velocityX * dt;

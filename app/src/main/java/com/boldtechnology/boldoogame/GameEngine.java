@@ -185,7 +185,7 @@ public final class GameEngine {
             boolean stomp = player.velocityY > 90f
                     && player.y + Player.HEIGHT <= enemy.y + Math.min(52f, enemy.height * 0.43f);
             if (stomp || player.groundPounding) {
-                hitEnemy(enemy, player.groundPounding ? 2 : 1);
+                hitEnemy(enemy, enemy.isBoss() ? 1 : (player.groundPounding ? 2 : 1));
                 player.velocityY = player.groundPounding ? -530f : -430f;
                 player.groundPounding = false;
                 player.onGround = false;

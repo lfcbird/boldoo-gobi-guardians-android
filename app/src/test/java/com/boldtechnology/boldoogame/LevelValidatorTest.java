@@ -1,5 +1,6 @@
 package com.boldtechnology.boldoogame;
 
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThrows;
 
 import org.junit.Test;
@@ -16,6 +17,18 @@ public final class LevelValidatorTest {
         LevelData level = levelWithGround();
         level.requiredWater = 1;
         assertThrows(IllegalArgumentException.class, () -> LevelValidator.validate(level));
+    }
+
+    @Test
+    public void bossReportsThreeHealthPhases() {
+        LevelData.Enemy boss = new LevelData.Enemy();
+        boss.type = LevelData.Enemy.GREAT_SMOG;
+        boss.maxHealth = boss.health = 3;
+        assertEquals(1, boss.phase());
+        boss.health = 2;
+        assertEquals(2, boss.phase());
+        boss.health = 1;
+        assertEquals(3, boss.phase());
     }
 
     private static LevelData levelWithGround() {

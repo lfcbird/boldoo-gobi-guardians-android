@@ -20,6 +20,18 @@ public final class PlayerMovementTest {
         assertTrue(player.velocityY < 0f);
     }
 
+    @Test
+    public void windMovesAnIdlePlayer() {
+        LevelData level = flatLevel();
+        Player player = new Player();
+        InputController input = new InputController();
+        player.reset(300, 610 - Player.HEIGHT);
+        player.update(1f / 60f, input, level, 0f);
+        for (int i = 0; i < 12; i++) player.update(1f / 60f, input, level, -250f);
+        assertTrue(player.velocityX < -150f);
+        assertTrue(player.x < 300f);
+    }
+
     private static LevelData flatLevel() {
         LevelData level = new LevelData();
         level.id = 1;

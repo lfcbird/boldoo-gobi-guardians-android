@@ -436,6 +436,23 @@ public final class GameRenderer {
             text(canvas, engine.markersCollected + "/" + engine.level.totalMarkers(), 484, 59, 24, Color.WHITE);
         }
 
+        if (engine.player.hasGroundPound || engine.player.hasDash || engine.player.hasShield) {
+            panel(canvas, 618, 24, 148, 50, 23, 0xB80C2C38);
+            if (engine.player.hasGroundPound) {
+                drawDownArrow(canvas, 644, 49, 0.42f);
+                String status = engine.player.hasShield
+                        ? "НҮДЭЛТ • Б" + engine.player.shieldCharges : "НҮДЭЛТ";
+                text(canvas, status, 670, 57, engine.player.hasShield ? 14 : 17, Color.WHITE);
+            } else if (engine.player.hasDash) {
+                drawBolt(canvas, 644, 49, 0.46f);
+                text(canvas, engine.player.dashCooldown > 0f ? "ЦЭНЭГ" : "ХУРД", 670, 57, 17,
+                        engine.player.dashCooldown > 0f ? 0xFF9DB6B4 : Color.WHITE);
+            } else {
+                drawShield(canvas, 644, 49, 0.42f);
+                text(canvas, "БАМБАЙ " + engine.player.shieldCharges, 670, 57, 15, Color.WHITE);
+            }
+        }
+
         panel(canvas, 836, 24, 380, 50, 24, 0xB80C2C38);
         paint.setColor(0x553B777B);
         canvas.drawRoundRect(new RectF(866, 43, 1184, 56), 7, 7, paint);
