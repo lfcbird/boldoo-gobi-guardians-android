@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.BoldooGame" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowFullscreen">true</item>
+        <item name="android:windowActionModeOverlay">true</item>
+        <item name="android:colorAccent">#F4B552</item>
+        <item name="android:navigationBarColor">#0D2D3A</item>
+        <item name="android:windowLightNavigationBar">false</item>
+    </style>
+</resources>
