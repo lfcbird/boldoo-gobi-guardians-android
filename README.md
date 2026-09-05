@@ -27,7 +27,7 @@ Minimum Android version: Android 6.0 (API 23).
 
 In Android Studio choose **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
 
-The ready-to-install MVP APK is also included in the `release` folder.
+Prebuilt APK files are distributed separately and are intentionally excluded from source control.
 
 ## Credits
 
