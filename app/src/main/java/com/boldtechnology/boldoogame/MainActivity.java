@@ -50,4 +50,15 @@ public final class MainActivity extends Activity {
         hideSystemUi();
         if (gameView != null) gameView.setPaused(false);
     }
+
+    @Override
+    public void onBackPressed() {
+        if (gameView == null || !gameView.handleBackPressed()) super.onBackPressed();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (gameView != null) gameView.release();
+        super.onDestroy();
+    }
 }
