@@ -1,0 +1,24 @@
+# Android Studio / Gradle
+.gradle/
+.idea/
+build/
+**/build/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Generated packages and signing material
+release/
+*.apk
+*.aab
+*.apks
+*.idsig
+*.jks
+*.keystore
+
+# OS / editor files
+.DS_Store
+Thumbs.db
+*.iml
+*.swp
