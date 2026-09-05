@@ -1,0 +1,54 @@
+{
+  "id": 1,
+  "title": "Oasis Rescue",
+  "titleMn": "Баянбүрдийн аврал",
+  "objectiveMn": "10 усны дуслыг цуглуулаад баянбүрдэд хүр",
+  "environment": "OASIS",
+  "worldWidth": 3600,
+  "groundY": 610,
+  "startX": 80,
+  "startY": 502,
+  "goalX": 3420,
+  "parTime": 105,
+  "requiredWater": 10,
+  "requiredMarkers": 0,
+  "platforms": [
+    {"id":"p1_ground","x":0,"y":610,"width":3600,"height":130},
+    {"id":"p1_a","x":330,"y":500,"width":230,"height":28},
+    {"id":"p1_b","x":720,"y":430,"width":250,"height":28},
+    {"id":"p1_c","x":1100,"y":505,"width":230,"height":28},
+    {"id":"p1_d","x":1450,"y":400,"width":260,"height":28},
+    {"id":"p1_e","x":1940,"y":480,"width":250,"height":28},
+    {"id":"p1_f","x":2340,"y":390,"width":240,"height":28},
+    {"id":"p1_g","x":2760,"y":485,"width":250,"height":28},
+    {"id":"p1_h","x":3120,"y":420,"width":230,"height":28}
+  ],
+  "collectibles": [
+    {"id":"p1_w1","type":"WATER","x":190,"y":552},
+    {"id":"p1_w2","type":"WATER","x":445,"y":440},
+    {"id":"p1_w3","type":"WATER","x":845,"y":370},
+    {"id":"p1_w4","type":"WATER","x":1215,"y":445},
+    {"id":"p1_w5","type":"WATER","x":1580,"y":340},
+    {"id":"p1_w6","type":"WATER","x":1840,"y":550},
+    {"id":"p1_w7","type":"WATER","x":2065,"y":420},
+    {"id":"p1_w8","type":"WATER","x":2460,"y":330},
+    {"id":"p1_w9","type":"WATER","x":2875,"y":425},
+    {"id":"p1_w10","type":"WATER","x":3235,"y":360}
+  ],
+  "enemies": [
+    {"id":"p1_e1","type":"SMOGLING","x":570,"y":532,"minX":560,"maxX":690,"speed":78},
+    {"id":"p1_e2","type":"SMOGLING","x":1160,"y":427,"minX":1110,"maxX":1240,"speed":88},
+    {"id":"p1_e3","type":"SMOGLING","x":1740,"y":532,"minX":1710,"maxX":1900,"speed":96},
+    {"id":"p1_e4","type":"SMOGLING","x":2390,"y":312,"minX":2350,"maxX":2490,"speed":72},
+    {"id":"p1_e5","type":"SMOGLING","x":2990,"y":532,"minX":2920,"maxX":3100,"speed":108}
+  ],
+  "hazards": [
+    {"id":"p1_h1","type":"SPIKES","x":1340,"y":586,"width":95,"height":24},
+    {"id":"p1_h2","type":"SPIKES","x":2615,"y":586,"width":100,"height":24}
+  ],
+  "checkpoints": [
+    {"id":"p1_cp1","x":1810,"y":610}
+  ],
+  "abilities": [],
+  "barriers": []
+}

@@ -1,0 +1,74 @@
+{
+  "id": 3,
+  "title": "Storm Over Gobi",
+  "titleMn": "Говийн шуурга",
+  "objectiveMn": "Бохирдлын хаалтуудыг нурааж Их Утааг ял",
+  "environment": "STORM",
+  "worldWidth": 4800,
+  "groundY": 610,
+  "startX": 70,
+  "startY": 502,
+  "goalX": 4660,
+  "parTime": 165,
+  "requiredWater": 0,
+  "requiredMarkers": 0,
+  "platforms": [
+    {"id":"p3_g1","x":0,"y":610,"width":1050,"height":130},
+    {"id":"p3_g2","x":1170,"y":610,"width":980,"height":130},
+    {"id":"p3_g3","x":2260,"y":610,"width":1050,"height":130},
+    {"id":"p3_g4","x":3420,"y":610,"width":1380,"height":130},
+    {"id":"p3_m1","x":1055,"y":510,"width":110,"height":28,"moveY":-65,"speed":1.4,"phase":1.0},
+    {"id":"p3_m2","x":2160,"y":500,"width":95,"height":28,"moveY":-80,"speed":1.55,"phase":2.3},
+    {"id":"p3_m3","x":3320,"y":500,"width":95,"height":28,"moveY":-75,"speed":1.45,"phase":0.2},
+    {"id":"p3_a","x":310,"y":460,"width":240,"height":28},
+    {"id":"p3_b","x":800,"y":375,"width":210,"height":28},
+    {"id":"p3_c","x":1300,"y":450,"width":230,"height":28},
+    {"id":"p3_d","x":1770,"y":360,"width":250,"height":28},
+    {"id":"p3_e","x":2390,"y":420,"width":220,"height":28},
+    {"id":"p3_f","x":2840,"y":340,"width":250,"height":28},
+    {"id":"p3_g","x":3500,"y":420,"width":240,"height":28}
+  ],
+  "collectibles": [
+    {"id":"p3_w1","type":"WATER","x":430,"y":400},
+    {"id":"p3_w2","type":"WATER","x":900,"y":315},
+    {"id":"p3_w3","type":"WATER","x":1410,"y":390},
+    {"id":"p3_w4","type":"WATER","x":1890,"y":300},
+    {"id":"p3_w5","type":"WATER","x":2500,"y":360},
+    {"id":"p3_w6","type":"WATER","x":2960,"y":280},
+    {"id":"p3_w7","type":"WATER","x":3600,"y":360},
+    {"id":"p3_r1","type":"TRASH","x":680,"y":560},
+    {"id":"p3_r2","type":"TRASH","x":1510,"y":560},
+    {"id":"p3_r3","type":"TRASH","x":2680,"y":560},
+    {"id":"p3_r4","type":"TRASH","x":3750,"y":560}
+  ],
+  "enemies": [
+    {"id":"p3_e1","type":"SMOGLING","x":610,"y":532,"minX":560,"maxX":760,"speed":120},
+    {"id":"p3_e2","type":"SMOGLING","x":1350,"y":372,"minX":1310,"maxX":1440,"speed":112},
+    {"id":"p3_e3","type":"SMOGLING","x":1880,"y":282,"minX":1780,"maxX":1930,"speed":128},
+    {"id":"p3_e4","type":"SMOGLING","x":2890,"y":262,"minX":2850,"maxX":3000,"speed":135},
+    {"id":"p3_e5","type":"SMOGLING","x":3650,"y":532,"minX":3460,"maxX":3860,"speed":145},
+    {"id":"p3_boss","type":"GREAT_SMOG","x":4270,"y":460,"width":180,"height":150,"minX":4080,"maxX":4580,"speed":105,"health":3}
+  ],
+  "hazards": [
+    {"id":"p3_rocks1","type":"ROCK_ZONE","x":900,"y":0,"width":1050,"height":610,"interval":1.35,"delay":0.8},
+    {"id":"p3_wind1","type":"WIND","x":1950,"y":120,"width":980,"height":490,"strength":-285},
+    {"id":"p3_rocks2","type":"ROCK_ZONE","x":2700,"y":0,"width":1080,"height":610,"interval":1.0,"delay":0.4},
+    {"id":"p3_rocks3","type":"ROCK_ZONE","x":4020,"y":0,"width":700,"height":610,"interval":0.8,"delay":0.5},
+    {"id":"p3_spike1","type":"SPIKES","x":1550,"y":586,"width":110,"height":24},
+    {"id":"p3_spike2","type":"SPIKES","x":3140,"y":586,"width":120,"height":24}
+  ],
+  "checkpoints": [
+    {"id":"p3_cp1","x":1240,"y":610},
+    {"id":"p3_cp2","x":2700,"y":610},
+    {"id":"p3_cp3","x":3900,"y":610}
+  ],
+  "abilities": [
+    {"id":"p3_shield","type":"SHIELD","x":390,"y":395},
+    {"id":"p3_pound","type":"GROUND_POUND","x":1820,"y":295}
+  ],
+  "barriers": [
+    {"id":"p3_barrier1","x":2050,"y":470,"width":72,"height":140,"health":1},
+    {"id":"p3_barrier2","x":3200,"y":450,"width":76,"height":160,"health":1},
+    {"id":"p3_barrier3","x":3970,"y":430,"width":78,"height":180,"health":1}
+  ]
+}

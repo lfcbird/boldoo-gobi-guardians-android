@@ -1,587 +1,546 @@
 package com.boldtechnology.boldoogame;
 
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.LinearGradient;
-import android.graphics.Paint;
-import android.graphics.Path;
-import android.graphics.Rect;
 import android.graphics.RectF;
-import android.graphics.Shader;
-import android.graphics.Typeface;
 import android.view.HapticFeedbackConstants;
 import android.view.MotionEvent;
 import android.view.View;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Locale;
 
 public final class GameView extends View {
-    private static final float VIEW_W = 1280f;
-    private static final float VIEW_H = 720f;
-    private static final float WORLD_W = 2440f;
-    private static final float PLAYER_W = 104f;
-    private static final float PLAYER_H = 118f;
-    private static final float GRAVITY = 1500f;
-    private static final float RUN_SPEED = 350f;
-    private static final float JUMP_SPEED = 680f;
+    private static final float VIEW_W = GameRenderer.VIEW_W;
+    private static final float VIEW_H = GameRenderer.VIEW_H;
+    private static final float FIXED_STEP = 1f / 60f;
 
-    private static final int TITLE = 0;
-    private static final int PLAYING = 1;
-    private static final int WON = 2;
-    private static final int GAME_OVER = 3;
+    private final GameRenderer renderer;
+    private final GameEngine engine;
+    private final SaveManager saveManager;
+    private final InputController input = new InputController();
+    private final ParticleSystem particles = new ParticleSystem();
+    private final GameAudio audio;
+    private GameSettings settings;
 
-    private final Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
-    private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Bitmap background;
-    private final Bitmap boldoo;
-    private final Bitmap smogling;
-    private final List<RectF> platforms = new ArrayList<>();
-    private final List<Drop> drops = new ArrayList<>();
-    private final List<Enemy> enemies = new ArrayList<>();
-
-    private float playerX;
-    private float playerY;
-    private float velocityX;
-    private float velocityY;
-    private float cameraX;
-    private float elapsed;
-    private float invincible;
-    private float messageTimer;
+    private ScreenState screen = ScreenState.SPLASH;
+    private ScreenState settingsReturn = ScreenState.MAIN_MENU;
+    private int currentLevel = 1;
+    private float uiElapsed;
+    private float splashTimer = 1.65f;
+    private float accumulator;
     private long lastFrameNanos;
-    private int facing = 1;
-    private int state = TITLE;
-    private int score;
-    private int lives;
-    private int collected;
-    private boolean onGround;
-    private boolean leftHeld;
-    private boolean rightHeld;
-    private boolean jumpHeld;
-    private boolean jumpWasHeld;
-    private boolean paused;
+    private boolean appPaused;
+    private boolean resetConfirmation;
+    private boolean audioReleased;
 
     public GameView(Context context) {
         super(context);
         setFocusable(true);
         setLayerType(View.LAYER_TYPE_SOFTWARE, null);
-        background = BitmapFactory.decodeResource(getResources(), R.drawable.gobi_background);
-        boldoo = BitmapFactory.decodeResource(getResources(), R.drawable.boldoo_player);
-        smogling = BitmapFactory.decodeResource(getResources(), R.drawable.smogling_enemy);
-        textPaint.setTypeface(Typeface.create(Typeface.SANS_SERIF, Typeface.BOLD));
-        textPaint.setShadowLayer(4f, 0f, 2f, 0xAA082733);
-        createLevel();
-        resetGame();
-    }
-
-    private void createLevel() {
-        platforms.clear();
-        platforms.add(new RectF(0, 610, WORLD_W, 740));
-        platforms.add(new RectF(300, 500, 235, 28));
-        platforms.add(new RectF(650, 430, 245, 28));
-        platforms.add(new RectF(980, 500, 230, 28));
-        platforms.add(new RectF(1280, 410, 245, 28));
-        platforms.add(new RectF(1630, 500, 225, 28));
-        platforms.add(new RectF(1950, 420, 230, 28));
-        platforms.add(new RectF(2200, 520, 180, 28));
-
-        drops.clear();
-        drops.add(new Drop(175, 548));
-        drops.add(new Drop(415, 438));
-        drops.add(new Drop(760, 368));
-        drops.add(new Drop(905, 548));
-        drops.add(new Drop(1085, 438));
-        drops.add(new Drop(1395, 348));
-        drops.add(new Drop(1560, 548));
-        drops.add(new Drop(1735, 438));
-        drops.add(new Drop(2050, 358));
-        drops.add(new Drop(2290, 458));
-
-        enemies.clear();
-        enemies.add(new Enemy(560, 532, 500, 640, 82));
-        enemies.add(new Enemy(1070, 422, 1000, 1170, 72));
-        enemies.add(new Enemy(1790, 532, 1690, 1880, 88));
-    }
-
-    private void resetGame() {
-        playerX = 75;
-        playerY = 610 - PLAYER_H;
-        velocityX = 0;
-        velocityY = 0;
-        cameraX = 0;
-        elapsed = 0;
-        invincible = 0;
-        score = 0;
-        lives = 3;
-        collected = 0;
-        onGround = true;
-        leftHeld = false;
-        rightHeld = false;
-        jumpHeld = false;
-        jumpWasHeld = false;
-        for (Drop drop : drops) drop.collected = false;
-        for (Enemy enemy : enemies) enemy.active = true;
-    }
-
-    private void startGame() {
-        resetGame();
-        state = PLAYING;
+        saveManager = new SaveManager(context);
+        settings = saveManager.loadSettings();
+        renderer = new GameRenderer(getResources());
+        engine = new GameEngine(context);
+        audio = new GameAudio(context, settings);
+        audio.resume();
         lastFrameNanos = System.nanoTime();
-        performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-    }
-
-    public void setPaused(boolean value) {
-        paused = value;
-        lastFrameNanos = System.nanoTime();
-        if (!paused) postInvalidateOnAnimation();
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         long now = System.nanoTime();
-        float dt = lastFrameNanos == 0 ? 0f : Math.min(0.033f, (now - lastFrameNanos) / 1_000_000_000f);
+        float frameTime = lastFrameNanos == 0L ? 0f
+                : Math.min(0.1f, (now - lastFrameNanos) / 1_000_000_000f);
         lastFrameNanos = now;
+        if (appPaused) frameTime = 0f;
 
-        if (!paused && state == PLAYING) update(dt);
+        uiElapsed += frameTime;
+        renderer.setElapsed(uiElapsed);
+        if (screen == ScreenState.SPLASH) {
+            splashTimer -= frameTime;
+            if (splashTimer <= 0f) screen = ScreenState.MAIN_MENU;
+        }
+        if (screen == ScreenState.PLAYING) updateGame(frameTime);
+        else particles.update(frameTime);
 
         float scaleX = getWidth() / VIEW_W;
         float scaleY = getHeight() / VIEW_H;
         canvas.save();
         canvas.scale(scaleX, scaleY);
-        drawScene(canvas);
+        drawScreen(canvas);
         canvas.restore();
 
-        if (!paused) postInvalidateOnAnimation();
+        if (!appPaused) postInvalidateOnAnimation();
     }
 
-    private void update(float dt) {
-        elapsed += dt;
-        if (invincible > 0) invincible -= dt;
-        if (messageTimer > 0) messageTimer -= dt;
-
-        if (leftHeld == rightHeld) {
-            velocityX *= (float) Math.pow(0.0007, dt);
-            if (Math.abs(velocityX) < 8) velocityX = 0;
-        } else if (leftHeld) {
-            velocityX = -RUN_SPEED;
-            facing = -1;
-        } else {
-            velocityX = RUN_SPEED;
-            facing = 1;
-        }
-
-        if (jumpHeld && !jumpWasHeld && onGround) {
-            velocityY = -JUMP_SPEED;
-            onGround = false;
-            performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-        }
-        jumpWasHeld = jumpHeld;
-
-        float previousBottom = playerY + PLAYER_H;
-        playerX += velocityX * dt;
-        playerX = clamp(playerX, 0, WORLD_W - PLAYER_W);
-        velocityY += GRAVITY * dt;
-        playerY += velocityY * dt;
-        resolvePlatformLanding(previousBottom);
-
-        for (Enemy enemy : enemies) {
-            if (!enemy.active) continue;
-            enemy.x += enemy.speed * enemy.direction * dt;
-            if (enemy.x < enemy.minX) {
-                enemy.x = enemy.minX;
-                enemy.direction = 1;
-            } else if (enemy.x > enemy.maxX) {
-                enemy.x = enemy.maxX;
-                enemy.direction = -1;
+    private void updateGame(float frameTime) {
+        accumulator = Math.min(accumulator + frameTime, FIXED_STEP * 6f);
+        while (accumulator >= FIXED_STEP && screen == ScreenState.PLAYING) {
+            engine.update(FIXED_STEP, input);
+            particles.update(FIXED_STEP);
+            if (engine.player.landed) particles.dust(engine.player.centerX(), engine.player.y + Player.HEIGHT);
+            for (GameEvent event : engine.drainEvents()) processEvent(event);
+            if (engine.runState == GameEngine.RunState.COMPLETED) {
+                saveManager.recordCompletion(engine.level.id, engine.resultScore, engine.elapsed,
+                        engine.resultStars, engine.waterCollected);
+                input.clear();
+                screen = ScreenState.RESULTS;
+            } else if (engine.runState == GameEngine.RunState.DEAD) {
+                input.clear();
+                screen = ScreenState.GAME_OVER;
             }
-        }
-
-        collectDrops();
-        checkEnemies(previousBottom);
-
-        if (playerY > VIEW_H + 80) loseLife();
-        if (playerX > 2260 && collected == drops.size()) {
-            state = WON;
-            score += 1000 + lives * 250;
-            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-        } else if (playerX > 2230 && collected < drops.size()) {
-            messageTimer = 0.4f;
-        }
-
-        float desiredCamera = clamp(playerX - 390, 0, WORLD_W - VIEW_W);
-        cameraX += (desiredCamera - cameraX) * Math.min(1f, dt * 5f);
-    }
-
-    private void resolvePlatformLanding(float previousBottom) {
-        onGround = false;
-        if (velocityY < 0) return;
-        float currentBottom = playerY + PLAYER_H;
-        float bestTop = Float.MAX_VALUE;
-        for (RectF platform : platforms) {
-            float left = platform.left;
-            float top = platform.top;
-            float right = platform.left + platform.right;
-            if (playerX + PLAYER_W > left + 8
-                    && playerX < right - 8
-                    && previousBottom <= top + 12
-                    && currentBottom >= top
-                    && top < bestTop) {
-                bestTop = top;
-            }
-        }
-        if (bestTop < Float.MAX_VALUE) {
-            playerY = bestTop - PLAYER_H;
-            velocityY = 0;
-            onGround = true;
+            accumulator -= FIXED_STEP;
         }
     }
 
-    private void collectDrops() {
-        RectF player = playerBounds();
-        for (Drop drop : drops) {
-            if (!drop.collected && RectF.intersects(player, new RectF(drop.x - 24, drop.y - 28, drop.x + 24, drop.y + 28))) {
-                drop.collected = true;
-                collected++;
-                score += 100;
-                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
-            }
-        }
-    }
-
-    private void checkEnemies(float previousBottom) {
-        RectF player = playerBounds();
-        for (Enemy enemy : enemies) {
-            if (!enemy.active) continue;
-            RectF enemyBounds = new RectF(enemy.x, enemy.y, enemy.x + 78, enemy.y + 78);
-            if (!RectF.intersects(player, enemyBounds)) continue;
-            if (velocityY > 80 && previousBottom <= enemy.y + 24) {
-                enemy.active = false;
-                velocityY = -JUMP_SPEED * 0.55f;
-                score += 250;
+    private void processEvent(GameEvent event) {
+        audio.play(event.type);
+        particles.emit(event);
+        if (!settings.haptics) return;
+        switch (event.type) {
+            case HURT:
+            case LIFE_LOST:
+            case BARRIER:
+            case BOSS_HIT:
+            case COMPLETE:
                 performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-            } else if (invincible <= 0) {
-                loseLife();
-                return;
-            }
+                break;
+            case JUMP:
+            case WATER:
+            case TRAIL:
+            case TRASH:
+            case STOMP:
+            case CHECKPOINT:
+            case ABILITY:
+            case SHIELD:
+                performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
+                break;
         }
     }
 
-    private void loseLife() {
-        if (invincible > 0) return;
-        lives--;
-        if (lives <= 0) {
-            state = GAME_OVER;
-            performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+    private void drawScreen(Canvas canvas) {
+        switch (screen) {
+            case SPLASH: drawSplash(canvas); break;
+            case MAIN_MENU: drawMainMenu(canvas); break;
+            case LEVEL_SELECT: drawLevelSelect(canvas); break;
+            case PLAYING: renderer.drawGame(canvas, engine, settings, input, particles); break;
+            case PAUSED: drawPaused(canvas); break;
+            case SETTINGS: drawSettings(canvas); break;
+            case RESULTS: drawResults(canvas); break;
+            case GAME_OVER: drawGameOver(canvas); break;
+            case FINAL_VICTORY: drawFinalVictory(canvas); break;
+            case CREDITS: drawCredits(canvas); break;
+        }
+    }
+
+    private void drawSplash(Canvas canvas) {
+        renderer.drawMenuBackdrop(canvas);
+        renderer.drawHero(canvas, new RectF(500, 150, 780, 430), false);
+        renderer.centered(canvas, "BOLDOO", 640, 505, 62, 0xFFF6BF59);
+        renderer.centered(canvas, "GUARDIANS OF THE GOBI", 640, 550, 29, Color.WHITE);
+        renderer.centered(canvas, "BOLD TECHNOLOGY SOLUTIONS", 640, 604, 16, 0xFFBBD6D3);
+        renderer.panel(canvas, 470, 640, 340, 10, 5, 0x554A7377);
+        float progress = GameMath.clamp(1f - splashTimer / 1.65f, 0f, 1f);
+        renderer.panel(canvas, 470, 640, 340 * progress, 10, 5, 0xFFF1BE57);
+    }
+
+    private void drawMainMenu(Canvas canvas) {
+        renderer.drawMenuBackdrop(canvas);
+        renderer.drawHero(canvas, new RectF(92, 190, 430, 552), false);
+        renderer.drawLogo(canvas, 480, 145);
+        renderer.centered(canvas, "Говийн ус, амьтад, цэнхэр тэнгэрийг хамгаал", 785, 282, 21, 0xFFE0E8D7);
+        renderer.button(canvas, rect(560, 322, 450, 70), "АЯЛЛЫГ ЭХЛҮҮЛЭХ", true, true);
+        renderer.button(canvas, rect(560, 410, 450, 64), "ҮЕ СОНГОХ", true, false);
+        renderer.button(canvas, rect(560, 490, 216, 60), "ТОХИРГОО", true, false);
+        renderer.button(canvas, rect(794, 490, 216, 60), "БҮТЭЭГЧИД", true, false);
+        renderer.drawWaterIcon(canvas, 572, 607, 0.48f);
+        renderer.text(canvas, "НИЙТ УС  " + saveManager.getTotalWater(), 600, 616, 21, 0xFFF5D47E);
+        renderer.text(canvas, "v0.2.0 • OFFLINE", 850, 616, 17, 0xFFB4CECB);
+    }
+
+    private void drawLevelSelect(Canvas canvas) {
+        renderer.drawMenuBackdrop(canvas);
+        renderer.centered(canvas, "ҮЕ СОНГОХ", 640, 92, 43, 0xFFF4C25F);
+        renderer.centered(canvas, "Нээгдсэн үеэ сонгоод Говийн аяллаа үргэлжлүүл", 640, 132, 20, 0xFFD0DFDD);
+        int unlocked = saveManager.getUnlockedLevel();
+        drawLevelCard(canvas, 1, 92, 178, "БАЯНБҮРДИЙН АВРАЛ", "Усны 10 дуслыг цуглуул", unlocked >= 1);
+        drawLevelCard(canvas, 2, 470, 178, "НҮҮДЛИЙН ЗАМ", "Замын тэмдгийг сэргээ", unlocked >= 2);
+        drawLevelCard(canvas, 3, 848, 178, "ГОВИЙН ШУУРГА", "Их Утааг ял", unlocked >= 3);
+        renderer.button(canvas, rect(45, 626, 180, 55), "БУЦАХ", true, false);
+    }
+
+    private void drawLevelCard(Canvas canvas, int levelId, float x, float y,
+                               String title, String objective, boolean unlocked) {
+        int color = unlocked ? 0xE5143B47 : 0xD52A3439;
+        renderer.panel(canvas, x, y, 340, 390, 28, color);
+        renderer.panel(canvas, x + 18, y + 18, 304, 118, 20,
+                levelId == 1 ? 0xFF1B7F83 : levelId == 2 ? 0xFF69703C : 0xFF5E4055);
+        renderer.centered(canvas, "ҮЕ " + levelId, x + 170, y + 62, 20, 0xFFFFD46E);
+        renderer.centered(canvas, levelId == 1 ? "OASIS" : levelId == 2 ? "MIGRATION" : "STORM",
+                x + 170, y + 106, 29, Color.WHITE);
+        if (!unlocked) {
+            renderer.drawLock(canvas, x + 170, y + 185, 1.2f);
+            renderer.centered(canvas, "ӨМНӨХ ҮЕИЙГ ДУУСГА", x + 170, y + 275, 17, 0xFF9FACAE);
             return;
         }
-        playerX = Math.max(45, playerX - 170);
-        playerY = 610 - PLAYER_H;
-        velocityX = 0;
-        velocityY = 0;
-        invincible = 2f;
-        performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
+        renderer.centered(canvas, title, x + 170, y + 181, 20, Color.WHITE);
+        renderer.centered(canvas, objective, x + 170, y + 216, 17, 0xFFC9DCDA);
+        int stars = saveManager.getBestStars(levelId);
+        for (int i = 0; i < 3; i++) renderer.drawStar(canvas, x + 125 + i * 46, y + 255, 20, i < stars);
+        int best = saveManager.getBestScore(levelId);
+        float bestTime = saveManager.getBestTime(levelId);
+        renderer.centered(canvas, best > 0 ? "ШИЛДЭГ ОНОО  " + best : "ШИНЭ АЯЛАЛ",
+                x + 170, y + 303, 17, 0xFFFFD47C);
+        if (bestTime > 0f) renderer.centered(canvas, "ХУГАЦАА  " + formatTime(bestTime), x + 170, y + 327, 15, 0xFFABC5C4);
+        renderer.button(canvas, rect(x + 64, y + 337, 212, 48), "ТОГЛОХ", true, true);
     }
 
-    private RectF playerBounds() {
-        return new RectF(playerX + 18, playerY + 10, playerX + PLAYER_W - 18, playerY + PLAYER_H - 4);
+    private void drawPaused(Canvas canvas) {
+        renderer.drawGame(canvas, engine, settings, input, particles);
+        renderer.panel(canvas, 0, 0, VIEW_W, VIEW_H, 0, 0xB90A202A);
+        renderer.panel(canvas, 390, 102, 500, 532, 34, 0xF0133742);
+        renderer.centered(canvas, "ТҮР ЗОГССОН", 640, 180, 42, 0xFFF5C25C);
+        renderer.centered(canvas, engine.level.titleMn, 640, 220, 20, 0xFFC7DAD8);
+        renderer.button(canvas, rect(462, 262, 356, 65), "ҮРГЭЛЖЛҮҮЛЭХ", true, true);
+        renderer.button(canvas, rect(462, 345, 356, 62), "ҮЕИЙГ ДАХИН ЭХЛЭХ", true, false);
+        renderer.button(canvas, rect(462, 425, 356, 62), "ТОХИРГОО", true, false);
+        renderer.button(canvas, rect(462, 505, 356, 62), "ҮЕ СОНГОХ", true, false);
+        renderer.centered(canvas, "Урагшилсан checkpoint энэ тоглолтод хадгалагдана", 640, 604, 16, 0xFF9DB9B6);
     }
 
-    private void drawScene(Canvas canvas) {
-        drawBackground(canvas);
-        if (state == TITLE) {
-            drawTitle(canvas);
-            return;
-        }
-
-        drawWorld(canvas);
-        drawHud(canvas);
-        drawControls(canvas);
-
-        if (state == WON) drawOverlay(canvas, "ГОВИЙГ ХАМГААЛЛАА!", "Оноо: " + score, "ДАХИН ТОГЛОХ");
-        if (state == GAME_OVER) drawOverlay(canvas, "АЯЛАЛ ДУУСЛАА", "Оноо: " + score, "ДАХИН ОРОЛДОХ");
+    private void drawSettings(Canvas canvas) {
+        renderer.drawMenuBackdrop(canvas);
+        renderer.panel(canvas, 275, 54, 730, 610, 34, 0xEF123642);
+        renderer.centered(canvas, "ТОХИРГОО", 640, 111, 40, 0xFFF4C25F);
+        settingsRow(canvas, "ДУУНЫ ЭФФЕКТ", "Үсрэлт, цуглуулга, мөргөлдөөн", 155, settings.soundEffects);
+        settingsRow(canvas, "ОРЧНЫ ДУУ", "Говийн намуухан салхи", 235, settings.ambientSound);
+        settingsRow(canvas, "ЧИЧИРГЭЭ", "Үйлдэл бүрийн мэдрэмж", 315, settings.haptics);
+        settingsRow(canvas, "ЗҮҮН ГАРЫН УДИРДЛАГА", "Хөдөлгөөн ба үйлдлийн талыг солино", 395, settings.leftHanded);
+        renderer.text(canvas, "ТОВЧНЫ ТОД БАЙДАЛ", 335, 493, 21, Color.WHITE);
+        renderer.text(canvas, Math.round(settings.controlOpacity * 100) + "%", 828, 493, 20, 0xFFFFD06B);
+        renderer.panel(canvas, 690, 472, 118, 18, 9, 0xFF52666B);
+        renderer.panel(canvas, 690, 472, 118 * settings.controlOpacity, 18, 9, 0xFF16A79C);
+        renderer.button(canvas, rect(333, 526, 290, 56), "ЯВЦЫГ ЦЭВЭРЛЭХ", true, false);
+        renderer.button(canvas, rect(657, 526, 290, 56), "БУЦАХ", true, true);
+        if (resetConfirmation) drawResetConfirmation(canvas);
     }
 
-    private void drawBackground(Canvas canvas) {
-        float travel = cameraX / Math.max(1f, WORLD_W - VIEW_W);
-        int srcW = Math.min(background.getWidth(), Math.round(background.getHeight() * VIEW_W / VIEW_H));
-        int maxOffset = Math.max(0, background.getWidth() - srcW);
-        int srcLeft = Math.round(maxOffset * travel);
-        Rect src = new Rect(srcLeft, 0, srcLeft + srcW, background.getHeight());
-        canvas.drawBitmap(background, src, new RectF(0, 0, VIEW_W, VIEW_H), paint);
-        paint.setColor(0x17052A35);
-        canvas.drawRect(0, 0, VIEW_W, VIEW_H, paint);
+    private void settingsRow(Canvas canvas, String title, String subtitle, float y, boolean on) {
+        renderer.text(canvas, title, 335, y, 21, Color.WHITE);
+        renderer.text(canvas, subtitle, 335, y + 27, 15, 0xFF9FB9B7);
+        renderer.toggle(canvas, 832, y - 25, on);
     }
 
-    private void drawWorld(Canvas canvas) {
-        canvas.save();
-        canvas.translate(-cameraX, 0);
-
-        for (RectF platform : platforms) drawPlatform(canvas, platform);
-        drawFinish(canvas);
-
-        for (Drop drop : drops) if (!drop.collected) drawDrop(canvas, drop.x, drop.y);
-        for (Enemy enemy : enemies) if (enemy.active) drawEnemy(canvas, enemy);
-
-        if (invincible <= 0 || ((int) (invincible * 10)) % 2 == 0) drawPlayer(canvas);
-        canvas.restore();
-
-        if (messageTimer > 0 && collected < drops.size()) {
-            drawPill(canvas, 430, 92, 420, 58, 0xDA0D2D3A);
-            drawCenteredText(canvas, "Үлдсэн усны дусал: " + (drops.size() - collected), 640, 130, 28, Color.WHITE);
-        }
+    private void drawResetConfirmation(Canvas canvas) {
+        renderer.panel(canvas, 0, 0, VIEW_W, VIEW_H, 0, 0xB8122026);
+        renderer.panel(canvas, 370, 205, 540, 285, 30, 0xFF173A45);
+        renderer.centered(canvas, "ЯВЦЫГ ЦЭВЭРЛЭХ ҮҮ?", 640, 270, 30, 0xFFFFC760);
+        renderer.centered(canvas, "Оноо, од, нээгдсэн үе бүгд арилна.", 640, 315, 19, Color.WHITE);
+        renderer.centered(canvas, "Тохиргоо хэвээр үлдэнэ.", 640, 347, 17, 0xFFAEC5C3);
+        renderer.button(canvas, rect(415, 390, 205, 58), "БОЛИХ", true, false);
+        renderer.button(canvas, rect(660, 390, 205, 58), "ЦЭВЭРЛЭХ", true, true);
     }
 
-    private void drawPlatform(Canvas canvas, RectF data) {
-        float left = data.left;
-        float top = data.top;
-        float right = data.left + data.right;
-        float bottom = data.top + data.bottom;
-        paint.setShader(new LinearGradient(0, top, 0, bottom, 0xFFF7C96F, 0xFF9A5B2C, Shader.TileMode.CLAMP));
-        canvas.drawRoundRect(new RectF(left, top, right, bottom), 16, 16, paint);
-        paint.setShader(null);
-        paint.setColor(0xFF663A22);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(4);
-        canvas.drawRoundRect(new RectF(left, top, right, bottom), 16, 16, paint);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xFFEFD58A);
-        canvas.drawRoundRect(new RectF(left + 5, top + 4, right - 5, top + 12), 8, 8, paint);
+    private void drawResults(Canvas canvas) {
+        renderer.drawMenuBackdrop(canvas);
+        renderer.panel(canvas, 310, 70, 660, 575, 36, 0xF0123541);
+        renderer.centered(canvas, "ҮЕ АМЖИЛТТАЙ!", 640, 137, 39, 0xFFF5C25C);
+        renderer.centered(canvas, engine.level.titleMn, 640, 177, 21, Color.WHITE);
+        for (int i = 0; i < 3; i++) renderer.drawStar(canvas, 550 + i * 90, 244, 37, i < engine.resultStars);
+        renderer.centered(canvas, engine.resultStars + " / 3 ОД", 640, 302, 20, 0xFFFFDE89);
+        resultLine(canvas, "ОНОО", String.valueOf(engine.resultScore), 351);
+        resultLine(canvas, "ХУГАЦАА", formatTime(engine.elapsed), 394);
+        resultLine(canvas, "УС", engine.waterCollected + " / " + engine.level.totalWater(), 437);
+        renderer.button(canvas, rect(385, 489, 238, 62), "ДАХИН ТОГЛОХ", true, false);
+        renderer.button(canvas, rect(657, 489, 238, 62), engine.level.id < 3 ? "ДАРААГИЙН ҮЕ" : "ТӨГСГӨЛ", true, true);
+        renderer.button(canvas, rect(520, 568, 240, 50), "ҮЕ СОНГОХ", true, false);
     }
 
-    private void drawPlayer(Canvas canvas) {
-        float bob = onGround && Math.abs(velocityX) > 20 ? (float) Math.sin(elapsed * 14) * 3f : 0f;
-        RectF dst = new RectF(playerX, playerY + bob, playerX + PLAYER_W, playerY + PLAYER_H + bob);
-        canvas.save();
-        if (facing < 0) {
-            canvas.scale(-1, 1, dst.centerX(), dst.centerY());
-        }
-        canvas.drawBitmap(boldoo, null, dst, paint);
-        canvas.restore();
+    private void resultLine(Canvas canvas, String label, String value, float y) {
+        renderer.text(canvas, label, 448, y, 19, 0xFFA9C2BF);
+        renderer.text(canvas, value, 686, y, 23, Color.WHITE);
     }
 
-    private void drawEnemy(Canvas canvas, Enemy enemy) {
-        float bob = (float) Math.sin(elapsed * 4 + enemy.x * 0.01f) * 5f;
-        RectF dst = new RectF(enemy.x, enemy.y + bob, enemy.x + 78, enemy.y + 78 + bob);
-        canvas.save();
-        if (enemy.direction > 0) canvas.scale(-1, 1, dst.centerX(), dst.centerY());
-        canvas.drawBitmap(smogling, null, dst, paint);
-        canvas.restore();
+    private void drawGameOver(Canvas canvas) {
+        renderer.drawMenuBackdrop(canvas);
+        renderer.panel(canvas, 360, 110, 560, 490, 34, 0xF01B303A);
+        renderer.centered(canvas, "АЯЛАЛ ТҮР ЗОГСЛОО", 640, 192, 36, 0xFFFFB55E);
+        renderer.centered(canvas, "Болдоо бууж өгдөггүй.", 640, 239, 22, Color.WHITE);
+        renderer.centered(canvas, "Checkpoint: " + engine.checkpointNumber, 640, 283, 18, 0xFFAAC4C1);
+        renderer.centered(canvas, "ОНОО  " + engine.score, 640, 335, 25, 0xFFFFD171);
+        renderer.button(canvas, rect(450, 382, 380, 65), "ДАХИН ОРОЛДОХ", true, true);
+        renderer.button(canvas, rect(450, 465, 380, 62), "ҮЕ СОНГОХ", true, false);
+        renderer.button(canvas, rect(520, 543, 240, 42), "ҮНДСЭН ЦЭС", true, false);
     }
 
-    private void drawDrop(Canvas canvas, float x, float y) {
-        float pulse = 1f + (float) Math.sin(elapsed * 5 + x) * 0.08f;
-        canvas.save();
-        canvas.scale(pulse, pulse, x, y);
-        Path path = new Path();
-        path.moveTo(x, y - 28);
-        path.cubicTo(x + 8, y - 11, x + 22, y + 2, x + 22, y + 13);
-        path.cubicTo(x + 22, y + 28, x + 11, y + 36, x, y + 36);
-        path.cubicTo(x - 11, y + 36, x - 22, y + 28, x - 22, y + 13);
-        path.cubicTo(x - 22, y + 2, x - 8, y - 11, x, y - 28);
-        paint.setShader(new LinearGradient(x - 20, y - 25, x + 20, y + 35,
-                0xFF8DF4FF, 0xFF0796C8, Shader.TileMode.CLAMP));
-        canvas.drawPath(path, paint);
-        paint.setShader(null);
-        paint.setColor(0xFF075B78);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(4);
-        canvas.drawPath(path, paint);
-        paint.setStyle(Paint.Style.FILL);
-        paint.setColor(0xBFFFFFFF);
-        canvas.drawCircle(x - 7, y + 4, 5, paint);
-        canvas.restore();
+    private void drawFinalVictory(Canvas canvas) {
+        renderer.drawBackdrop(canvas, 0, VIEW_W, "OASIS");
+        renderer.panel(canvas, 0, 0, VIEW_W, VIEW_H, 0, 0x72052935);
+        renderer.drawHero(canvas, new RectF(125, 225, 485, 600), false);
+        renderer.text(canvas, "ГОВИЙН ТЭНГЭР", 515, 177, 53, 0xFFF6C35E);
+        renderer.text(canvas, "ДАХИН ЦЭЛМЭЛЭЭ", 515, 235, 53, Color.WHITE);
+        renderer.text(canvas, "Болдоо, Хулан, Тахь, Хавтгай дөрвөн хамгаалагч", 520, 304, 21, 0xFFD8E7D9);
+        renderer.text(canvas, "ус, нүүдлийн зам, цэнхэр тэнгэрээ аварлаа.", 520, 337, 21, 0xFFD8E7D9);
+        renderer.centered(canvas, "НИЙТ ЦУГЛУУЛСАН УС  " + saveManager.getTotalWater(), 755, 410, 23, 0xFFFFD579);
+        renderer.button(canvas, rect(528, 459, 454, 66), "БҮТЭЭГЧДИЙГ ҮЗЭХ", true, true);
+        renderer.button(canvas, rect(528, 544, 454, 60), "ҮНДСЭН ЦЭС", true, false);
     }
 
-    private void drawFinish(Canvas canvas) {
-        float x = 2330;
-        paint.setColor(0xFF5A3423);
-        canvas.drawRoundRect(new RectF(x, 350, x + 12, 610), 5, 5, paint);
-        paint.setColor(0xFF0D5265);
-        Path flag = new Path();
-        flag.moveTo(x + 10, 362);
-        flag.lineTo(x + 150, 382);
-        flag.lineTo(x + 10, 440);
-        flag.close();
-        canvas.drawPath(flag, paint);
-        drawCenteredText(canvas, "БАРИА", x + 74, 405, 22, 0xFFF8D27A);
-        paint.setColor(0xFF0A9EA6);
-        canvas.drawOval(new RectF(x - 34, 574, x + 55, 625), paint);
-        paint.setColor(0xAA8CF4FF);
-        canvas.drawOval(new RectF(x - 23, 581, x + 42, 615), paint);
+    private void drawCredits(Canvas canvas) {
+        renderer.drawMenuBackdrop(canvas);
+        renderer.panel(canvas, 215, 55, 850, 610, 36, 0xEF123642);
+        renderer.centered(canvas, "БҮТЭЭГЧИД", 640, 118, 40, 0xFFF5C25C);
+        renderer.centered(canvas, "BOLDOO: GUARDIANS OF THE GOBI", 640, 163, 22, Color.WHITE);
+        credit(canvas, "ӨГҮҮЛЭЛ БА ДҮРҮҮД", "Oyunbold Ganbold", 225);
+        credit(canvas, "ХӨГЖҮҮЛЭЛТ", "Bold Technology Solutions", 305);
+        credit(canvas, "ТЕХНОЛОГИ", "Native Android • Java • Canvas", 385);
+        credit(canvas, "ДУУ БА ДҮРС", "Тоглоомд зориулсан эх бүтээл", 465);
+        renderer.centered(canvas, "Mario/Nintendo-ийн хөрөнгө, нэр, хөгжим ашиглаагүй.", 640, 530, 16, 0xFF9EB8B5);
+        renderer.centered(canvas, "Говийг хайрлан хамгаалъя.", 640, 570, 21, 0xFFFFD174);
+        renderer.button(canvas, rect(510, 600, 260, 48), "БУЦАХ", true, true);
     }
 
-    private void drawHud(Canvas canvas) {
-        drawPill(canvas, 24, 22, 450, 58, 0xCC0D2D3A);
-        drawText(canvas, "💧 " + collected + "/" + drops.size(), 48, 61, 27, Color.WHITE);
-        drawText(canvas, "ОНОО  " + score, 184, 61, 27, 0xFFF7C96F);
-        drawText(canvas, "АМЬ  " + lives, 342, 61, 27, Color.WHITE);
-
-        float progress = clamp(playerX / (WORLD_W - PLAYER_W), 0, 1);
-        paint.setColor(0x770D2D3A);
-        canvas.drawRoundRect(new RectF(890, 34, 1240, 50), 8, 8, paint);
-        paint.setColor(0xFFF4B552);
-        canvas.drawRoundRect(new RectF(890, 34, 890 + 350 * progress, 50), 8, 8, paint);
-        paint.setColor(Color.WHITE);
-        canvas.drawCircle(890 + 350 * progress, 42, 9, paint);
+    private void credit(Canvas canvas, String role, String name, float y) {
+        renderer.centered(canvas, role, 640, y, 16, 0xFF9CB9B7);
+        renderer.centered(canvas, name, 640, y + 34, 22, Color.WHITE);
     }
 
-    private void drawControls(Canvas canvas) {
-        drawControlCircle(canvas, 86, 625, 58, leftHeld);
-        drawControlCircle(canvas, 222, 625, 58, rightHeld);
-        drawControlCircle(canvas, 1170, 615, 68, jumpHeld);
-
-        paint.setColor(Color.WHITE);
-        Path leftArrow = new Path();
-        leftArrow.moveTo(105, 596);
-        leftArrow.lineTo(65, 625);
-        leftArrow.lineTo(105, 654);
-        leftArrow.close();
-        canvas.drawPath(leftArrow, paint);
-
-        Path rightArrow = new Path();
-        rightArrow.moveTo(203, 596);
-        rightArrow.lineTo(243, 625);
-        rightArrow.lineTo(203, 654);
-        rightArrow.close();
-        canvas.drawPath(rightArrow, paint);
-
-        Path jumpArrow = new Path();
-        jumpArrow.moveTo(1170, 576);
-        jumpArrow.lineTo(1138, 620);
-        jumpArrow.lineTo(1159, 620);
-        jumpArrow.lineTo(1159, 651);
-        jumpArrow.lineTo(1181, 651);
-        jumpArrow.lineTo(1181, 620);
-        jumpArrow.lineTo(1202, 620);
-        jumpArrow.close();
-        canvas.drawPath(jumpArrow, paint);
+    private void startLevel(int levelId) {
+        currentLevel = Math.max(1, Math.min(3, levelId));
+        engine.startLevel(currentLevel);
+        particles.clear();
+        input.clear();
+        accumulator = 0f;
+        screen = ScreenState.PLAYING;
+        haptic(HapticFeedbackConstants.VIRTUAL_KEY);
     }
 
-    private void drawControlCircle(Canvas canvas, float x, float y, float radius, boolean pressed) {
-        paint.setColor(pressed ? 0xBFF4B552 : 0x770D2D3A);
-        canvas.drawCircle(x, y, radius, paint);
-        paint.setColor(0xAAFFFFFF);
-        paint.setStyle(Paint.Style.STROKE);
-        paint.setStrokeWidth(4);
-        canvas.drawCircle(x, y, radius, paint);
-        paint.setStyle(Paint.Style.FILL);
+    private void pauseGame() {
+        if (screen != ScreenState.PLAYING) return;
+        input.clear();
+        screen = ScreenState.PAUSED;
+        haptic(HapticFeedbackConstants.VIRTUAL_KEY);
     }
 
-    private void drawTitle(Canvas canvas) {
-        paint.setColor(0xA80A2632);
-        canvas.drawRect(0, 0, VIEW_W, VIEW_H, paint);
-
-        paint.setColor(0xFFF4B552);
-        canvas.drawCircle(154, 115, 58, paint);
-        paint.setColor(0xFF0D2D3A);
-        canvas.drawCircle(176, 98, 54, paint);
-
-        RectF hero = new RectF(90, 205, 430, 545);
-        canvas.drawBitmap(boldoo, null, hero, paint);
-
-        drawText(canvas, "BOLDOO", 470, 180, 74, 0xFFF4B552);
-        drawText(canvas, "GUARDIANS OF THE GOBI", 470, 245, 42, Color.WHITE);
-        drawText(canvas, "Говийн усыг хамгаалах анхны аялал", 474, 300, 26, 0xFFE8D8B9);
-
-        drawPill(canvas, 500, 360, 470, 92, 0xEE0E8290);
-        drawCenteredText(canvas, "ТОГЛОХ", 735, 420, 38, Color.WHITE);
-        drawCenteredText(canvas, "← → хөдөлнө     ↑ үсэрнэ", 735, 505, 25, Color.WHITE);
-        drawCenteredText(canvas, "10 усны дуслыг цуглуулаад баянбүрдэд хүрээрэй", 735, 552, 22, 0xFFF8D27A);
-        drawCenteredText(canvas, "Bold Technology Solutions • MVP 0.1", 735, 668, 18, 0xFFCEE4E2);
+    private void resumeGame() {
+        if (screen != ScreenState.PAUSED) return;
+        input.clear();
+        accumulator = 0f;
+        lastFrameNanos = System.nanoTime();
+        screen = ScreenState.PLAYING;
+        haptic(HapticFeedbackConstants.VIRTUAL_KEY);
     }
 
-    private void drawOverlay(Canvas canvas, String title, String subtitle, String button) {
-        paint.setColor(0xB20A2632);
-        canvas.drawRect(0, 0, VIEW_W, VIEW_H, paint);
-        drawCenteredText(canvas, title, 640, 264, 56, 0xFFF4B552);
-        drawCenteredText(canvas, subtitle, 640, 330, 34, Color.WHITE);
-        drawPill(canvas, 440, 392, 400, 92, 0xEE0E8290);
-        drawCenteredText(canvas, button, 640, 452, 32, Color.WHITE);
-        drawCenteredText(canvas, "Дэлгэц дээр дарж үргэлжлүүлнэ", 640, 530, 23, 0xFFE8D8B9);
-    }
-
-    private void drawPill(Canvas canvas, float x, float y, float width, float height, int color) {
-        paint.setColor(color);
-        canvas.drawRoundRect(new RectF(x, y, x + width, y + height), height / 2, height / 2, paint);
-    }
-
-    private void drawText(Canvas canvas, String text, float x, float y, float size, int color) {
-        textPaint.setTextSize(size);
-        textPaint.setColor(color);
-        textPaint.setTextAlign(Paint.Align.LEFT);
-        canvas.drawText(text, x, y, textPaint);
-    }
-
-    private void drawCenteredText(Canvas canvas, String text, float x, float y, float size, int color) {
-        textPaint.setTextSize(size);
-        textPaint.setColor(color);
-        textPaint.setTextAlign(Paint.Align.CENTER);
-        canvas.drawText(text, x, y, textPaint);
+    private void openSettings(ScreenState returnTo) {
+        settingsReturn = returnTo;
+        resetConfirmation = false;
+        input.clear();
+        screen = ScreenState.SETTINGS;
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
-        float scaleX = getWidth() / VIEW_W;
-        float scaleY = getHeight() / VIEW_H;
+        float x = event.getX(event.getActionIndex()) * VIEW_W / Math.max(1f, getWidth());
+        float y = event.getY(event.getActionIndex()) * VIEW_H / Math.max(1f, getHeight());
+        int action = event.getActionMasked();
 
-        if (event.getActionMasked() == MotionEvent.ACTION_DOWN && state != PLAYING) {
-            startGame();
+        if (screen == ScreenState.SPLASH && action == MotionEvent.ACTION_DOWN) {
+            splashTimer = 0f;
+            screen = ScreenState.MAIN_MENU;
             return true;
         }
-
-        leftHeld = false;
-        rightHeld = false;
-        jumpHeld = false;
-        int lifted = event.getActionMasked() == MotionEvent.ACTION_POINTER_UP
-                || event.getActionMasked() == MotionEvent.ACTION_UP ? event.getActionIndex() : -1;
-        for (int i = 0; i < event.getPointerCount(); i++) {
-            if (i == lifted) continue;
-            float x = event.getX(i) / scaleX;
-            float y = event.getY(i) / scaleY;
-            if (y > 510 && x < 155) leftHeld = true;
-            else if (y > 510 && x < 330) rightHeld = true;
-            else if (y > 450 && x > 980) jumpHeld = true;
+        if (screen == ScreenState.PLAYING) {
+            if (action == MotionEvent.ACTION_DOWN && x >= 1190f && y >= 70f && y <= 160f) {
+                pauseGame();
+                return true;
+            }
+            updateGameplayPointers(event);
+            return true;
         }
-        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) {
-            leftHeld = rightHeld = jumpHeld = false;
+        if (action != MotionEvent.ACTION_DOWN) return true;
+
+        switch (screen) {
+            case MAIN_MENU: handleMainMenu(x, y); break;
+            case LEVEL_SELECT: handleLevelSelect(x, y); break;
+            case PAUSED: handlePauseMenu(x, y); break;
+            case SETTINGS: handleSettings(x, y); break;
+            case RESULTS: handleResults(x, y); break;
+            case GAME_OVER: handleGameOver(x, y); break;
+            case FINAL_VICTORY:
+                if (hit(x, y, 528, 459, 454, 66)) screen = ScreenState.CREDITS;
+                else if (hit(x, y, 528, 544, 454, 60)) screen = ScreenState.MAIN_MENU;
+                break;
+            case CREDITS:
+                if (hit(x, y, 510, 590, 260, 65)) screen = ScreenState.MAIN_MENU;
+                break;
+            default: break;
         }
         return true;
     }
 
-    private static float clamp(float value, float min, float max) {
-        return Math.max(min, Math.min(max, value));
+    private void handleMainMenu(float x, float y) {
+        if (hit(x, y, 560, 322, 450, 70)) startLevel(Math.min(saveManager.getUnlockedLevel(), 3));
+        else if (hit(x, y, 560, 410, 450, 64)) screen = ScreenState.LEVEL_SELECT;
+        else if (hit(x, y, 560, 490, 216, 60)) openSettings(ScreenState.MAIN_MENU);
+        else if (hit(x, y, 794, 490, 216, 60)) screen = ScreenState.CREDITS;
     }
 
-    private static final class Drop {
-        final float x;
-        final float y;
-        boolean collected;
+    private void handleLevelSelect(float x, float y) {
+        if (hit(x, y, 45, 610, 190, 80)) {
+            screen = ScreenState.MAIN_MENU;
+            return;
+        }
+        int level = x < 432 ? 1 : x < 810 ? 2 : 3;
+        float cardX = level == 1 ? 92 : level == 2 ? 470 : 848;
+        if (hit(x, y, cardX, 178, 340, 410) && saveManager.getUnlockedLevel() >= level) startLevel(level);
+    }
 
-        Drop(float x, float y) {
-            this.x = x;
-            this.y = y;
+    private void handlePauseMenu(float x, float y) {
+        if (hit(x, y, 462, 262, 356, 65)) resumeGame();
+        else if (hit(x, y, 462, 345, 356, 62)) startLevel(currentLevel);
+        else if (hit(x, y, 462, 425, 356, 62)) openSettings(ScreenState.PAUSED);
+        else if (hit(x, y, 462, 505, 356, 62)) screen = ScreenState.LEVEL_SELECT;
+    }
+
+    private void handleSettings(float x, float y) {
+        if (resetConfirmation) {
+            if (hit(x, y, 415, 390, 205, 58)) resetConfirmation = false;
+            else if (hit(x, y, 660, 390, 205, 58)) {
+                saveManager.resetProgress();
+                resetConfirmation = false;
+                haptic(HapticFeedbackConstants.LONG_PRESS);
+            }
+            return;
+        }
+        if (hit(x, y, 800, 120, 140, 75)) settings.soundEffects = !settings.soundEffects;
+        else if (hit(x, y, 800, 200, 140, 75)) settings.ambientSound = !settings.ambientSound;
+        else if (hit(x, y, 800, 280, 140, 75)) settings.haptics = !settings.haptics;
+        else if (hit(x, y, 800, 360, 140, 75)) settings.leftHanded = !settings.leftHanded;
+        else if (hit(x, y, 660, 445, 270, 75)) settings.cycleOpacity();
+        else if (hit(x, y, 333, 526, 290, 56)) {
+            resetConfirmation = true;
+            return;
+        } else if (hit(x, y, 657, 526, 290, 56)) {
+            saveManager.saveSettings(settings);
+            audio.setSettings(settings);
+            screen = settingsReturn;
+            return;
+        }
+        saveManager.saveSettings(settings);
+        audio.setSettings(settings);
+        haptic(HapticFeedbackConstants.VIRTUAL_KEY);
+    }
+
+    private void handleResults(float x, float y) {
+        if (hit(x, y, 385, 489, 238, 62)) startLevel(currentLevel);
+        else if (hit(x, y, 657, 489, 238, 62)) {
+            if (currentLevel < 3) startLevel(currentLevel + 1);
+            else screen = ScreenState.FINAL_VICTORY;
+        } else if (hit(x, y, 500, 555, 280, 80)) screen = ScreenState.LEVEL_SELECT;
+    }
+
+    private void handleGameOver(float x, float y) {
+        if (hit(x, y, 450, 382, 380, 65)) startLevel(currentLevel);
+        else if (hit(x, y, 450, 465, 380, 62)) screen = ScreenState.LEVEL_SELECT;
+        else if (hit(x, y, 500, 530, 280, 70)) screen = ScreenState.MAIN_MENU;
+    }
+
+    private void updateGameplayPointers(MotionEvent event) {
+        int lifted = (event.getActionMasked() == MotionEvent.ACTION_UP
+                || event.getActionMasked() == MotionEvent.ACTION_POINTER_UP)
+                ? event.getActionIndex() : -1;
+        boolean left = false;
+        boolean right = false;
+        boolean jump = false;
+        boolean ability = false;
+        for (int index = 0; index < event.getPointerCount(); index++) {
+            if (index == lifted) continue;
+            float x = event.getX(index) * VIEW_W / Math.max(1f, getWidth());
+            float y = event.getY(index) * VIEW_H / Math.max(1f, getHeight());
+            if (y < 505f) continue;
+            if (settings.leftHanded) {
+                if (x < 180f) jump = true;
+                else if (x < 340f) ability = true;
+                else if (x > 1120f) right = true;
+                else if (x > 970f) left = true;
+            } else {
+                if (x < 160f) left = true;
+                else if (x < 320f) right = true;
+                else if (x > 1090f) jump = true;
+                else if (x > 930f) ability = true;
+            }
+        }
+        if (event.getActionMasked() == MotionEvent.ACTION_CANCEL) left = right = jump = ability = false;
+        input.setState(left, right, jump, ability);
+    }
+
+    public boolean handleBackPressed() {
+        if (screen == ScreenState.PLAYING) {
+            pauseGame();
+            return true;
+        }
+        if (screen == ScreenState.PAUSED) {
+            resumeGame();
+            return true;
+        }
+        if (screen == ScreenState.SETTINGS) {
+            if (resetConfirmation) resetConfirmation = false;
+            else {
+                saveManager.saveSettings(settings);
+                audio.setSettings(settings);
+                screen = settingsReturn;
+            }
+            return true;
+        }
+        if (screen == ScreenState.LEVEL_SELECT || screen == ScreenState.CREDITS
+                || screen == ScreenState.RESULTS || screen == ScreenState.GAME_OVER
+                || screen == ScreenState.FINAL_VICTORY) {
+            screen = ScreenState.MAIN_MENU;
+            return true;
+        }
+        if (screen == ScreenState.SPLASH) {
+            screen = ScreenState.MAIN_MENU;
+            return true;
+        }
+        return false;
+    }
+
+    public void setPaused(boolean paused) {
+        appPaused = paused;
+        input.clear();
+        if (paused) {
+            if (screen == ScreenState.PLAYING) screen = ScreenState.PAUSED;
+            audio.pause();
+        } else {
+            lastFrameNanos = System.nanoTime();
+            audio.resume();
+            postInvalidateOnAnimation();
         }
     }
 
-    private static final class Enemy {
-        float x;
-        final float y;
-        final float minX;
-        final float maxX;
-        final float speed;
-        int direction = -1;
-        boolean active = true;
-
-        Enemy(float x, float y, float minX, float maxX, float speed) {
-            this.x = x;
-            this.y = y;
-            this.minX = minX;
-            this.maxX = maxX;
-            this.speed = speed;
+    public void release() {
+        if (!audioReleased) {
+            audioReleased = true;
+            audio.release();
         }
+    }
+
+    private void haptic(int constant) {
+        if (settings.haptics) performHapticFeedback(constant);
+    }
+
+    private static RectF rect(float x, float y, float width, float height) {
+        return new RectF(x, y, x + width, y + height);
+    }
+
+    private static boolean hit(float x, float y, float left, float top, float width, float height) {
+        return x >= left && x <= left + width && y >= top && y <= top + height;
+    }
+
+    private static String formatTime(float seconds) {
+        int total = Math.max(0, Math.round(seconds));
+        return String.format(Locale.US, "%d:%02d", total / 60, total % 60);
     }
 }
